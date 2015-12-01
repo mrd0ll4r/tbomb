@@ -210,17 +210,7 @@ func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
 	transactionID := atomic.AddUint32(c.transId, 1)
 
 	var connId uint64
-	var connIdExpires <-chan time.Time
-
-	//connect
-	c.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	connId, err = c.connect(transactionID)
-	if err != nil {
-		fmt.Println("Unable to establish initial connect, will abort this client.")
-		return
-		//panic("Error connecting: " + err.Error())
-	}
-	connIdExpires = time.After(time.Minute)
+	connIdExpires := time.After(time.Duration(0))
 
 	//perform requests
 loop:
@@ -234,16 +224,16 @@ loop:
 
 		c.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
-		//check if we have to reconnect
+		//check if we have to (re)connect
 		if conf.keepAlive {
 			select {
 			case <-connIdExpires:
-				//reconnect
+				//(re)connect
 				transactionID = atomic.AddUint32(c.transId, 1)
 				connId, err = c.connect(transactionID)
 				if err != nil {
+					connIdExpires = time.After(time.Duration(0)) //we want to try this again ASAP
 					continue loop
-					//panic("Error connecting: " + err.Error())
 				}
 				connIdExpires = time.After(time.Minute)
 			default: //still valid
@@ -254,7 +244,6 @@ loop:
 			connId, err = c.connect(transactionID)
 			if err != nil {
 				continue loop
-				//panic("Error connecting: " + err.Error())
 			}
 		}
 
@@ -390,7 +379,11 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 	// parse action
 	action := binary.BigEndian.Uint32(buf[:4])
 	if action != 1 {
-		return errors.New("announce: tracker responded with announce != 1")
+		if action == 3 {
+			errVal := string(buf[8:n])
+			return fmt.Errorf("announce: tracker responded with error: %s", errVal)
+		}
+		return errors.New("announce: tracker responded with action != 1")
 	}
 
 	transID := binary.BigEndian.Uint32(buf[4:8])
