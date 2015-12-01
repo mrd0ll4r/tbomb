@@ -220,6 +220,9 @@ func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 	//prepare packet
 	packet, err := prepareAnnounce()
+	if err != nil {
+		panic(fmt.Sprintf("Unable to create packet: %s", err.Error()))
+	}
 
 	//prepare a receive buffer
 	buf := make([]byte, 1024)
