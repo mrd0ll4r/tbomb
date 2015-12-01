@@ -121,7 +121,7 @@ func main() {
 
 	fmt.Println("Waiting for results...")
 	wg.Wait()
-	printResults(results, startTime)
+	printResults(results, time.Since(startTime))
 }
 
 func newConfig() *Configuration {
@@ -159,7 +159,7 @@ func newConfig() *Configuration {
 	return configuration
 }
 
-func printResults(results []*Result, startTime time.Time) {
+func printResults(results []*Result, runTime time.Duration) {
 	var requests int64
 	var success int64
 	var failed int64
@@ -184,7 +184,7 @@ func printResults(results []*Result, startTime time.Time) {
 		}
 	}
 
-	elapsed := time.Since(startTime).Seconds()
+	elapsed := runTime.Seconds()
 
 	if elapsed == 0 {
 		elapsed = 1
