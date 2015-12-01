@@ -245,6 +245,7 @@ loop:
 					continue loop
 					//panic("Error connecting: " + err.Error())
 				}
+				connIdExpires = time.After(time.Minute)
 			default: //still valid
 			}
 		} else {
@@ -386,7 +387,16 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 		return errors.New("announce: Did not receive at least 20 bytes")
 	}
 
-	//TODO: check transactionID?
+	// parse action
+	action := binary.BigEndian.Uint32(buf[:4])
+	if action != 1 {
+		return errors.New("announce: tracker responded with announce != 1")
+	}
+
+	transID := binary.BigEndian.Uint32(buf[4:8])
+	if transID != transactionID {
+		return errors.New("announce: transaction IDs do not match")
+	}
 
 	return nil
 }
