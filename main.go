@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,6 +48,7 @@ type Result struct {
 	requests        int64
 	success         int64
 	failed          int64
+	errors          map[string]int64
 }
 
 type Client struct {
@@ -99,7 +101,9 @@ func main() {
 	wg.Add(clients)
 	startTime := time.Now()
 	for i := 0; i < clients; i++ {
-		result := &Result{}
+		result := &Result{
+			errors: make(map[string]int64),
+		}
 		results[i] = result
 
 		//fmt.Printf("Starting client %d...\n", i)
@@ -166,6 +170,7 @@ func printResults(results []*Result, startTime time.Time) {
 	var failed int64
 	var connectAttempts int64
 	var failedConnects int64
+	errors := make(map[string]int64)
 
 	for _, result := range results {
 		requests += result.requests
@@ -173,6 +178,13 @@ func printResults(results []*Result, startTime time.Time) {
 		failed += result.failed
 		connectAttempts += result.connectAttempts
 		failedConnects += result.failedConnects
+		for err, count := range result.errors {
+			_, exists := errors[err]
+			if !exists {
+				errors[err] = 0
+			}
+			errors[err] += count
+		}
 	}
 
 	elapsed := time.Since(startTime).Seconds()
@@ -189,6 +201,18 @@ func printResults(results []*Result, startTime time.Time) {
 	fmt.Printf("Failed connects:                %10d\n", failedConnects)
 	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success)/elapsed)
 	fmt.Printf("Test time:                      %10.2f sec\n", elapsed)
+	fmt.Println("Encountere errors:")
+	for err, count := range errors {
+		fmt.Printf("    %30s  %10d\n", err, count)
+	}
+}
+
+func (r *Result) incrementError(err string) {
+	_, exists := r.errors[err]
+	if !exists {
+		r.errors[err] = 0
+	}
+	r.errors[err]++
 }
 
 func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
@@ -232,6 +256,7 @@ loop:
 				transactionID = atomic.AddUint32(c.transId, 1)
 				connId, err = c.connect(transactionID)
 				if err != nil {
+					c.result.incrementError(err.Error())
 					connIdExpires = time.After(time.Duration(0)) //we want to try this again ASAP
 					continue loop
 				}
@@ -243,6 +268,7 @@ loop:
 			transactionID = atomic.AddUint32(c.transId, 1)
 			connId, err = c.connect(transactionID)
 			if err != nil {
+				c.result.incrementError(err.Error())
 				continue loop
 			}
 		}
@@ -254,7 +280,7 @@ loop:
 		err = c.announce(buf, packet, transactionID, connId, infohash, peerId)
 		c.result.requests++
 		if err != nil {
-			//fmt.Println(err)
+			c.result.incrementError(err.Error())
 			c.result.failed++
 		} else {
 			c.result.success++
@@ -370,7 +396,10 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 	//receive response
 	n, err = c.conn.Read(buf)
 	if err != nil {
-		return err
+		if strings.HasSuffix(err.Error(), "i/o timeout") {
+			return errors.New("announce: I/O timeout on receive")
+		}
+		return fmt.Errorf("announce: %s", err)
 	}
 	if n < 20 {
 		return errors.New("announce: Did not receive at least 20 bytes")
@@ -424,7 +453,10 @@ func (c *Client) connect(transactionID uint32) (u uint64, err error) {
 	buf = make([]byte, 64)
 	n, err = c.conn.Read(buf)
 	if err != nil {
-		return 0, err
+		if strings.HasSuffix(err.Error(), "i/o timeout") {
+			return 0, errors.New("connect: I/O timeout on receive")
+		}
+		return 0, fmt.Errorf("connect: %s", err)
 	}
 
 	if n != 16 {
