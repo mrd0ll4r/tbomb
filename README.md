@@ -17,6 +17,8 @@ Planned features:
 - Scrape mode (with multi-scrape)
 - Some way to limit the amount of infohashes/peerIDs generated
 - IPv6 mode? Maybe when IPv6 for UDP trackers is defined.
+- configure timeout
+- configure additional announce options? (downloaded, uploaded, left, event, ...)
 
 
 It was inspired by [gobench](https://github.com/cmpxchg16/gobench).
