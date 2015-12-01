@@ -21,7 +21,6 @@ var (
 	tid *uint32
 	ih  *uint64
 	pid *uint64
-	cid *uint32
 )
 
 //flags
@@ -82,7 +81,6 @@ func init() {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	flag.Parse()
 
 	c := newConfig()
@@ -105,8 +103,6 @@ func main() {
 			errors: make(map[string]int64),
 		}
 		results[i] = result
-
-		//fmt.Printf("Starting client %d...\n", i)
 
 		conn, err := net.Dial("udp4", c.url)
 		if err != nil {
@@ -217,13 +213,6 @@ func (r *Result) incrementError(err string) {
 
 func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
-
-	//clientId := atomic.AddUint32(cid, 1)
-
-	/*defer func() {
-		fmt.Printf("client %d done\n", clientId)
-	}()*/
-
 	//prepare packet
 	packet, err := prepareAnnounce()
 
