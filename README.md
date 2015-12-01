@@ -6,6 +6,7 @@ It (already!) has some cool features:
 
 - Pre-allocated packets (performance)
 - can reuse connection IDs (much like HTTP keepalive)
+- reports what errors occurred, and how many of them
 - random peer IDs
 - random infohashes
 - checks transaction IDs
