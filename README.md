@@ -70,5 +70,5 @@ Also note this: If (1714 + 15) = 1729 timeouts occurred, each after two seconds,
 concurrent clients over 30 seconds (=6000 seconds of work), about half of the time was actually blocked due to timeouts.
 
 
-## Lincese
+## License
 MIT
