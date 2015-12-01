@@ -65,6 +65,9 @@ This is what a typical report might look like:
         announce: I/O timeout on receive        1714
         connect: I/O timeout on receive          15
     
+Note that the test actually took about two seconds longer than specified - this is due to the receive timeout being two seconds.  
+Also note this: If (1714 + 15) = 1729 timeouts occurred, each after two seconds, 3458 seconds in total were timed out. With 200
+concurrent clients over 30 seconds (=6000 seconds of work), about half of the time was actually blocked due to timeouts.
 
 
 ## Lincese
