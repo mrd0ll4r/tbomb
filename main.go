@@ -25,12 +25,13 @@ var (
 
 //flags
 var (
-	timeout    int
-	requests   int64
-	clients    int
-	target     string
-	keepAlive  bool
-	scrapeMode bool
+	timeout        int
+	requests       int64
+	clients        int
+	target         string
+	keepAlive      bool
+	scrapeMode     bool
+	errorReporting bool
 )
 
 type Configuration struct {
@@ -65,6 +66,7 @@ func init() {
 	flag.StringVar(&target, "u", "", "Target URL (e.g. 127.0.0.1:12345 or tracker.example.org:1337)")
 	flag.BoolVar(&keepAlive, "k", false, "Re-use connection IDs")
 	flag.BoolVar(&scrapeMode, "s", false, "Scrape instead of announcing")
+	flag.BoolVar(&errorReporting, "e", false, "Enable detailed error reporting")
 
 	var infoh uint64 = uint64(rand.Int63())
 	ih = &infoh
@@ -171,12 +173,14 @@ func printResults(results []*Result, startTime time.Time) {
 		failed += result.failed
 		connectAttempts += result.connectAttempts
 		failedConnects += result.failedConnects
-		for err, count := range result.errors {
-			_, exists := errors[err]
-			if !exists {
-				errors[err] = 0
+		if errorReporting {
+			for err, count := range result.errors {
+				_, exists := errors[err]
+				if !exists {
+					errors[err] = 0
+				}
+				errors[err] += count
 			}
-			errors[err] += count
 		}
 	}
 
@@ -194,18 +198,22 @@ func printResults(results []*Result, startTime time.Time) {
 	fmt.Printf("Failed connects:                %10d\n", failedConnects)
 	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success)/elapsed)
 	fmt.Printf("Test time:                      %10.2f sec\n", elapsed)
-	fmt.Println("Encountere errors:")
-	for err, count := range errors {
-		fmt.Printf("    %30s  %10d\n", err, count)
+	if errorReporting {
+		fmt.Println("Encountere errors:")
+		for err, count := range errors {
+			fmt.Printf("    %30s  %10d\n", err, count)
+		}
 	}
 }
 
 func (r *Result) incrementError(err string) {
-	_, exists := r.errors[err]
-	if !exists {
-		r.errors[err] = 0
+	if errorReporting {
+		_, exists := r.errors[err]
+		if !exists {
+			r.errors[err] = 0
+		}
+		r.errors[err]++
 	}
-	r.errors[err]++
 }
 
 func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {

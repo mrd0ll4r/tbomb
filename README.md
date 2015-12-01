@@ -40,6 +40,7 @@ The options and arguments are:
     -r <requests>: specifies the number of requests to send _per_client_
     -c <clients>: specifies the number of concurrent clients to use
     -k: enables keep-alive mode (reusing connectionIDs)
+    -e: enables detailed error reports (has some impact on performance)
     (-s: enables scrape-mode (not yet implemented))
 
 
