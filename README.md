@@ -43,6 +43,27 @@ The options and arguments are:
     -e: enables detailed error reports (has some impact on performance)
     (-s: enables scrape-mode (not yet implemented))
 
+This is what a typical call might look like:
+
+    tbomb -c 200 -u localhost:6882 -t 30 -k -e
+
+This is what a typical report might look like:
+
+    Dispatching 200 clients
+    Waiting for results...
+    
+    Requests:                           489671
+    Successful requests:                487957
+    failed requests:                      1714
+    Connect attempts:                      215
+    Failed connects:                        15
+    Successful requests rate:            15259 hits/sec
+    Test time:                           31.98 sec
+    Encountere errors:
+        announce: I/O timeout on receive        1714
+        connect: I/O timeout on receive          15
+    
+
 
 ## Lincese
 MIT
