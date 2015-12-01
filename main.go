@@ -74,9 +74,6 @@ func init() {
 
 	var transid uint32 = rand.Uint32()
 	tid = &transid
-
-	var c uint32
-	cid = &c
 }
 
 func main() {
@@ -223,7 +220,7 @@ func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
 	transactionID := atomic.AddUint32(c.transId, 1)
 
 	var connId uint64
-	connIdExpires := time.After(time.Duration(0))
+	var connIdExpires <-chan time.Time
 
 	//perform requests
 loop:
@@ -239,18 +236,29 @@ loop:
 
 		//check if we have to (re)connect
 		if conf.keepAlive {
-			select {
-			case <-connIdExpires:
-				//(re)connect
+			if connIdExpires == nil {
+				//initial connect or fast reconnect
 				transactionID = atomic.AddUint32(c.transId, 1)
 				connId, err = c.connect(transactionID)
 				if err != nil {
 					c.result.incrementError(err.Error())
-					connIdExpires = time.After(time.Duration(0)) //we want to try this again ASAP
 					continue loop
 				}
 				connIdExpires = time.After(time.Minute)
-			default: //still valid
+			} else {
+				select {
+				case <-connIdExpires:
+					//reconnect
+					transactionID = atomic.AddUint32(c.transId, 1)
+					connId, err = c.connect(transactionID)
+					if err != nil {
+						c.result.incrementError(err.Error())
+						connIdExpires = nil //we want to try this again ASAP
+						continue loop
+					}
+					connIdExpires = time.After(time.Minute)
+				default: //still valid
+				}
 			}
 		} else {
 			//reconnect
