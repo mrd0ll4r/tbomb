@@ -25,11 +25,11 @@ var (
 
 //flags
 var (
-	timeout int
-	requests int64
-	clients int
-	target string
-	keepAlive bool
+	timeout    int
+	requests   int64
+	clients    int
+	target     string
+	keepAlive  bool
 	scrapeMode bool
 )
 
@@ -185,9 +185,9 @@ func printResults(results []*Result, startTime time.Time) {
 	fmt.Printf("Requests:                       %10d\n", requests)
 	fmt.Printf("Successful requests:            %10d\n", success)
 	fmt.Printf("failed requests:                %10d\n", failed)
-	fmt.Printf("Connect attempts:               %10d\n",connectAttempts)
-	fmt.Printf("Failed connects:                %10d\n",failedConnects)
-	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success) / elapsed)
+	fmt.Printf("Connect attempts:               %10d\n", connectAttempts)
+	fmt.Printf("Failed connects:                %10d\n", failedConnects)
+	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success)/elapsed)
 	fmt.Printf("Test time:                      %10.2f sec\n", elapsed)
 }
 
@@ -223,7 +223,7 @@ func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
 	connIdExpires = time.After(time.Minute)
 
 	//perform requests
-	loop:
+loop:
 	for c.result.requests < conf.requests {
 		//check if time has expired
 		select {
@@ -238,7 +238,7 @@ func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
 		if conf.keepAlive {
 			select {
 			case <-connIdExpires:
-			//reconnect
+				//reconnect
 				transactionID = atomic.AddUint32(c.transId, 1)
 				connId, err = c.connect(transactionID)
 				if err != nil {
@@ -364,8 +364,8 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 	peerIdString := fmt.Sprintf("%020x", peerID)
 
 	for i := 0; i < 20; i++ {
-		packet[16 + i] = infohashString[i]  //put infohash
-		packet[36 + i] = peerIdString[i] //put peerID
+		packet[16+i] = infohashString[i] //put infohash
+		packet[36+i] = peerIdString[i]   //put peerID
 	}
 
 	//send
@@ -391,7 +391,7 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 	return nil
 }
 
-func (c *Client) connect(transactionID uint32) (u uint64,err error) {
+func (c *Client) connect(transactionID uint32) (u uint64, err error) {
 	c.result.connectAttempts++
 	defer func() {
 		if err != nil {
