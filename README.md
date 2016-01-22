@@ -61,7 +61,7 @@ This is what a typical report might look like:
     Failed connects:                        15
     Successful requests rate:            15259 hits/sec
     Test time:                           31.98 sec
-    Encountere errors:
+    Errors encountered:
         announce: I/O timeout on receive        1714
         connect: I/O timeout on receive          15
     

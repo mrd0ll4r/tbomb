@@ -199,7 +199,7 @@ func printResults(results []*Result, runTime time.Duration) {
 	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success)/elapsed)
 	fmt.Printf("Test time:                      %10.2f sec\n", elapsed)
 	if errorReporting {
-		fmt.Println("Encountere errors:")
+		fmt.Println("Errors encountered:")
 		for err, count := range errors {
 			fmt.Printf("    %30s  %10d\n", err, count)
 		}
