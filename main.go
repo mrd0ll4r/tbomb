@@ -123,7 +123,7 @@ func main() {
 
 	fmt.Println("Waiting for results...")
 	wg.Wait()
-	printResults(results, time.Since(startTime))
+	printResults(results, time.Since(startTime), c)
 }
 
 func newConfig() *Configuration {
@@ -161,12 +161,13 @@ func newConfig() *Configuration {
 	return configuration
 }
 
-func printResults(results []*Result, runTime time.Duration) {
+func printResults(results []*Result, runTime time.Duration, c *Configuration) {
 	var requests int64
 	var success int64
 	var failed int64
 	var connectAttempts int64
 	var failedConnects int64
+	var timeouts int64
 	errors := make(map[string]int64)
 
 	for _, result := range results {
@@ -182,6 +183,10 @@ func printResults(results []*Result, runTime time.Duration) {
 					errors[err] = 0
 				}
 				errors[err] += count
+
+				if strings.Contains(err, "I/O timeout") {
+					timeouts += count
+				}
 			}
 		}
 	}
@@ -192,6 +197,11 @@ func printResults(results []*Result, runTime time.Duration) {
 		elapsed = 1
 	}
 
+	//compute concurrency
+	workTime := float64(clients) * elapsed
+	realTime := workTime - (float64(timeouts) * readTimeout.Seconds())
+	concurrency := float64(clients) * (realTime / workTime)
+
 	fmt.Println()
 	fmt.Printf("Requests:                       %10d\n", requests)
 	fmt.Printf("Successful requests:            %10d\n", success)
@@ -199,6 +209,7 @@ func printResults(results []*Result, runTime time.Duration) {
 	fmt.Printf("Connect attempts:               %10d\n", connectAttempts)
 	fmt.Printf("Failed connects:                %10d\n", failedConnects)
 	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success)/elapsed)
+	fmt.Printf("Approximate concurrency:        %10.2f clients running\n", concurrency)
 	fmt.Printf("Test time:                      %10.2f sec\n", elapsed)
 	if errorReporting {
 		fmt.Println("Errors encountered:")

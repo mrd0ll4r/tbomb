@@ -54,20 +54,24 @@ This is what a typical report might look like:
     Dispatching 200 clients
     Waiting for results...
     
-    Requests:                           489671
-    Successful requests:                487957
-    failed requests:                      1714
-    Connect attempts:                      215
-    Failed connects:                        15
-    Successful requests rate:            15259 hits/sec
-    Test time:                           31.98 sec
+    Requests:                           571644
+    Successful requests:                569970
+    failed requests:                      1674
+    Connect attempts:                      254
+    Failed connects:                        54
+    Successful requests rate:            18054 hits/sec
+    Approximate concurrency:             90.53 clients running
+    Test time:                           31.57 sec
     Errors encountered:
-        announce: I/O timeout on receive        1714
-        connect: I/O timeout on receive          15
+        announce: I/O timeout on receive        1674
+        connect: I/O timeout on receive          54
+
     
 Note that the test actually took about two seconds longer than specified - this is due to the receive timeout being two seconds.  
-Also note this: If (1714 + 15) = 1729 timeouts occurred, each after two seconds, 3458 seconds in total were timed out. With 200
-concurrent clients over 30 seconds (=6000 seconds of work), about half of the time was actually blocked due to timeouts.
+Note about the approximate concurrency: If 1674 + 54 = 1728 timeouts occurred, each after two seconds, 3456 seconds in 
+total were timed out. With 200 concurrent clients over 31.57 seconds (=6914 seconds of work), about half of the time 
+was actually blocked due to timeouts. The `approximate concurrency` value therefore indicates how many clients were 
+working full-time, (without waiting for I/O), on average. The value is experimental.
 
 
 ## License
