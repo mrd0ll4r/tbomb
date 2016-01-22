@@ -119,6 +119,12 @@ func main() {
 		}
 
 		go client.do(c, t, wg)
+		go func() {
+			if c.period > 0 {
+				<-t
+				conn.SetReadDeadline(time.Now())
+			}
+		}()
 	}
 
 	fmt.Println("Waiting for results...")
@@ -209,7 +215,9 @@ func printResults(results []*Result, runTime time.Duration, c *Configuration) {
 	fmt.Printf("Connect attempts:               %10d\n", connectAttempts)
 	fmt.Printf("Failed connects:                %10d\n", failedConnects)
 	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success)/elapsed)
-	fmt.Printf("Approximate concurrency:        %10.2f clients running\n", concurrency)
+	if c.period > 0 {
+		fmt.Printf("Approximate concurrency:        %10.2f clients running\n", concurrency)
+	}
 	fmt.Printf("Test time:                      %10.2f sec\n", elapsed)
 	if errorReporting {
 		fmt.Println("Errors encountered:")
@@ -219,8 +227,16 @@ func printResults(results []*Result, runTime time.Duration, c *Configuration) {
 	}
 }
 
-func (r *Result) incrementError(err string) {
+func (r *Result) incrementError(err string, t chan struct{}) {
 	if errorReporting {
+		if strings.Contains(err, "I/O timeout") {
+			select {
+			case <-t:
+				//timeout because we're done
+				return
+			default:
+			}
+		}
 		_, exists := r.errors[err]
 		if !exists {
 			r.errors[err] = 0
@@ -263,7 +279,7 @@ loop:
 				transactionID = atomic.AddUint32(c.transId, 1)
 				connId, err = c.connect(transactionID)
 				if err != nil {
-					c.result.incrementError(err.Error())
+					c.result.incrementError(err.Error(), t)
 					continue loop
 				}
 				connIdExpires = time.After(time.Minute)
@@ -274,7 +290,7 @@ loop:
 					transactionID = atomic.AddUint32(c.transId, 1)
 					connId, err = c.connect(transactionID)
 					if err != nil {
-						c.result.incrementError(err.Error())
+						c.result.incrementError(err.Error(), t)
 						connIdExpires = nil //we want to try this again ASAP
 						continue loop
 					}
@@ -287,7 +303,7 @@ loop:
 			transactionID = atomic.AddUint32(c.transId, 1)
 			connId, err = c.connect(transactionID)
 			if err != nil {
-				c.result.incrementError(err.Error())
+				c.result.incrementError(err.Error(), t)
 				continue loop
 			}
 		}
@@ -299,7 +315,7 @@ loop:
 		err = c.announce(buf, packet, transactionID, connId, infohash, peerId)
 		c.result.requests++
 		if err != nil {
-			c.result.incrementError(err.Error())
+			c.result.incrementError(err.Error(), t)
 			c.result.failed++
 		} else {
 			c.result.success++
