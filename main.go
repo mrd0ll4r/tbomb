@@ -34,6 +34,8 @@ var (
 	errorReporting bool
 )
 
+const readTimeout = time.Second * 2
+
 type Configuration struct {
 	url        string
 	requests   int64
@@ -243,8 +245,6 @@ loop:
 		default:
 		}
 
-		c.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-
 		//check if we have to (re)connect
 		if conf.keepAlive {
 			if connIdExpires == nil {
@@ -381,6 +381,8 @@ func prepareAnnounce() ([]byte, error) {
 }
 
 func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID, infohash, peerID uint64) error {
+	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
+
 	binary.BigEndian.PutUint64(packet[0:8], connectionID)
 	binary.BigEndian.PutUint32(packet[12:16], transactionID)
 
@@ -432,6 +434,8 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 }
 
 func (c *Client) connect(transactionID uint32) (u uint64, err error) {
+	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
+
 	c.result.connectAttempts++
 	defer func() {
 		if err != nil {
