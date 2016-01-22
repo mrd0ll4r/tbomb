@@ -34,7 +34,7 @@ var (
 	errorReporting bool
 )
 
-const readTimeout = time.Second * 2
+const readTimeout time.Duration = time.Second * 2
 
 type Configuration struct {
 	url        string
