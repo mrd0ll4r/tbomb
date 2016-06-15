@@ -16,14 +16,33 @@ import (
 	"time"
 )
 
-// global transactionID, infohash and peerID counters
+func init() {
+	flag.IntVar(&timeout, "t", 0, "Period of testing (in seconds)")
+	flag.Int64Var(&requests, "r", -1, "Number of requests per client, -1=unlimited")
+	flag.IntVar(&clients, "c", 100, "Number of concurrent clients")
+	flag.StringVar(&target, "u", "", "Target URL (e.g. 127.0.0.1:12345 or tracker.example.org:1337)")
+	flag.BoolVar(&keepAlive, "k", false, "Re-use connection IDs")
+	flag.BoolVar(&scrapeMode, "s", false, "Scrape instead of announcing")
+	flag.BoolVar(&errorReporting, "e", false, "Enable detailed error reporting")
+
+	var infoh = uint64(rand.Int63())
+	ih = &infoh
+
+	var peerid = uint64(rand.Int63())
+	pid = &peerid
+
+	var transid = rand.Uint32()
+	tid = &transid
+}
+
+// Global transactionID, infohash and peerID counters.
 var (
 	tid *uint32
 	ih  *uint64
 	pid *uint64
 )
 
-//flags
+// Flags.
 var (
 	timeout        int
 	requests       int64
@@ -36,7 +55,7 @@ var (
 
 const readTimeout time.Duration = time.Second * 2
 
-type Configuration struct {
+type configuration struct {
 	url        string
 	requests   int64
 	period     time.Duration
@@ -44,7 +63,7 @@ type Configuration struct {
 	scrapeMode bool
 }
 
-type Result struct {
+type result struct {
 	connectAttempts int64
 	failedConnects  int64
 	requests        int64
@@ -53,31 +72,12 @@ type Result struct {
 	errors          map[string]int64
 }
 
-type Client struct {
-	conn     net.Conn
-	result   *Result
-	infohash *uint64
-	peerId   *uint64
-	transId  *uint32
-}
-
-func init() {
-	flag.IntVar(&timeout, "t", 0, "Period of testing (in seconds)")
-	flag.Int64Var(&requests, "r", -1, "Number of requests per client, -1=unlimited")
-	flag.IntVar(&clients, "c", 100, "Number of concurrent clients")
-	flag.StringVar(&target, "u", "", "Target URL (e.g. 127.0.0.1:12345 or tracker.example.org:1337)")
-	flag.BoolVar(&keepAlive, "k", false, "Re-use connection IDs")
-	flag.BoolVar(&scrapeMode, "s", false, "Scrape instead of announcing")
-	flag.BoolVar(&errorReporting, "e", false, "Enable detailed error reporting")
-
-	var infoh uint64 = uint64(rand.Int63())
-	ih = &infoh
-
-	var peerid uint64 = uint64(rand.Int63())
-	pid = &peerid
-
-	var transid uint32 = rand.Uint32()
-	tid = &transid
+type client struct {
+	conn          net.Conn
+	result        *result
+	infohash      *uint64
+	peerID        *uint64
+	transactionID *uint32
 }
 
 func main() {
@@ -94,13 +94,13 @@ func main() {
 	}
 
 	wg := &sync.WaitGroup{}
-	results := make([]*Result, clients)
+	results := make([]*result, clients)
 
 	fmt.Printf("Dispatching %d clients\n", clients)
 	wg.Add(clients)
 	startTime := time.Now()
 	for i := 0; i < clients; i++ {
-		result := &Result{
+		result := &result{
 			errors: make(map[string]int64),
 		}
 		results[i] = result
@@ -110,12 +110,12 @@ func main() {
 			panic(err)
 		}
 
-		client := &Client{
-			conn:     conn,
-			result:   result,
-			infohash: ih,
-			peerId:   pid,
-			transId:  tid,
+		client := &client{
+			conn:          conn,
+			result:        result,
+			infohash:      ih,
+			peerID:        pid,
+			transactionID: tid,
 		}
 
 		go client.do(c, t, wg)
@@ -132,7 +132,7 @@ func main() {
 	printResults(results, time.Since(startTime), c)
 }
 
-func newConfig() *Configuration {
+func newConfig() *configuration {
 	if target == "" {
 		flag.Usage()
 		os.Exit(1)
@@ -148,7 +148,7 @@ func newConfig() *Configuration {
 		os.Exit(1)
 	}
 
-	configuration := &Configuration{
+	configuration := &configuration{
 		url:        target,
 		requests:   int64((1 << 63) - 1),
 		period:     time.Duration(0) * time.Second,
@@ -167,7 +167,7 @@ func newConfig() *Configuration {
 	return configuration
 }
 
-func printResults(results []*Result, runTime time.Duration, c *Configuration) {
+func printResults(results []*result, runTime time.Duration, c *configuration) {
 	var requests int64
 	var success int64
 	var failed int64
@@ -227,7 +227,7 @@ func printResults(results []*Result, runTime time.Duration, c *Configuration) {
 	}
 }
 
-func (r *Result) incrementError(err string, t chan struct{}) {
+func (r *result) incrementError(err string, t chan struct{}) {
 	if errorReporting {
 		if strings.Contains(err, "I/O timeout") {
 			select {
@@ -245,74 +245,74 @@ func (r *Result) incrementError(err string, t chan struct{}) {
 	}
 }
 
-func (c *Client) do(conf *Configuration, t chan struct{}, wg *sync.WaitGroup) {
+func (c *client) do(conf *configuration, t chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
-	//prepare packet
+	// Prepare a packet.
 	packet, err := prepareAnnounce()
 	if err != nil {
 		panic(fmt.Sprintf("Unable to create packet: %s", err.Error()))
 	}
 
-	//prepare a receive buffer
+	// Prepare a receive buffer.
 	buf := make([]byte, 1024)
 
-	//get a transaction ID
-	transactionID := atomic.AddUint32(c.transId, 1)
+	// Get a transaction ID.
+	transactionID := atomic.AddUint32(c.transactionID, 1)
 
-	var connId uint64
-	var connIdExpires <-chan time.Time
+	var connectionID uint64
+	var connectionIDExpired <-chan time.Time
 
-	//perform requests
+	// Perform requests.
 loop:
 	for c.result.requests < conf.requests {
-		//check if time has expired
+		// Check if time has expired.
 		select {
 		case <-t:
 			return
 		default:
 		}
 
-		//check if we have to (re)connect
+		// Check if we have to (re)connect.
 		if conf.keepAlive {
-			if connIdExpires == nil {
-				//initial connect or fast reconnect
-				transactionID = atomic.AddUint32(c.transId, 1)
-				connId, err = c.connect(transactionID)
+			if connectionIDExpired == nil {
+				// Initial connect or fast reconnect.
+				transactionID = atomic.AddUint32(c.transactionID, 1)
+				connectionID, err = c.connect(transactionID)
 				if err != nil {
 					c.result.incrementError(err.Error(), t)
 					continue loop
 				}
-				connIdExpires = time.After(time.Minute)
+				connectionIDExpired = time.After(time.Minute)
 			} else {
 				select {
-				case <-connIdExpires:
-					//reconnect
-					transactionID = atomic.AddUint32(c.transId, 1)
-					connId, err = c.connect(transactionID)
+				case <-connectionIDExpired:
+					// Reconnect.
+					transactionID = atomic.AddUint32(c.transactionID, 1)
+					connectionID, err = c.connect(transactionID)
 					if err != nil {
 						c.result.incrementError(err.Error(), t)
-						connIdExpires = nil //we want to try this again ASAP
+						connectionIDExpired = nil // Do a fast reconnect.
 						continue loop
 					}
-					connIdExpires = time.After(time.Minute)
-				default: //still valid
+					connectionIDExpired = time.After(time.Minute)
+				default:
 				}
 			}
 		} else {
-			//reconnect
-			transactionID = atomic.AddUint32(c.transId, 1)
-			connId, err = c.connect(transactionID)
+			// Reconnect on every request.
+			transactionID = atomic.AddUint32(c.transactionID, 1)
+			connectionID, err = c.connect(transactionID)
 			if err != nil {
 				c.result.incrementError(err.Error(), t)
 				continue loop
 			}
 		}
 
-		transactionID = atomic.AddUint32(c.transId, 1)
+		transactionID = atomic.AddUint32(c.transactionID, 1)
 		infohash := atomic.AddUint64(c.infohash, 1)
-		peerId := atomic.AddUint64(c.peerId, 1)
+		peerID := atomic.AddUint64(c.peerID, 1)
 
-		err = c.announce(buf, packet, transactionID, connId, infohash, peerId)
+		err = c.announce(buf, packet, transactionID, connectionID, infohash, peerID)
 		c.result.requests++
 		if err != nil {
 			c.result.incrementError(err.Error(), t)
@@ -326,55 +326,55 @@ loop:
 func prepareAnnounce() ([]byte, error) {
 	bbuf := bytes.NewBuffer(nil)
 
-	// connection id
+	// Connection id
 	_, err := bbuf.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})
 	if err != nil {
 		return nil, err
 	}
 
-	// action
+	// Action
 	_, err = bbuf.Write([]byte{0, 0, 0, 0x01})
 	if err != nil {
 		return nil, err
 	}
 
-	// transaction ID
+	// Transaction ID
 	_, err = bbuf.Write([]byte{0, 0, 0, 0})
 	if err != nil {
 		return nil, err
 	}
 
-	// infohash
+	// Infohash
 	_, err = bbuf.WriteString("xxxxxxxxxxxxxxxxxxxx")
 	if err != nil {
 		return nil, err
 	}
 
-	// peer ID
+	// Peer ID
 	_, err = bbuf.WriteString("xxxxxxxxxxxxxxxxxxxx")
 	if err != nil {
 		return nil, err
 	}
 
-	// downloaded
+	// Downloaded
 	_, err = bbuf.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})
 	if err != nil {
 		return nil, err
 	}
 
-	// left
+	// Left
 	_, err = bbuf.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0x01})
 	if err != nil {
 		return nil, err
 	}
 
-	// uploaded
+	// Uploaded
 	_, err = bbuf.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})
 	if err != nil {
 		return nil, err
 	}
 
-	// event
+	// Event
 	_, err = bbuf.Write([]byte{0, 0, 0, 0x02})
 	if err != nil {
 		return nil, err
@@ -386,19 +386,19 @@ func prepareAnnounce() ([]byte, error) {
 		return nil, err
 	}
 
-	// key (?)
+	// "Key"
 	_, err = bbuf.Write([]byte{0, 0, 0, 0})
 	if err != nil {
 		return nil, err
 	}
 
-	// numwant
+	// Numwant
 	_, err = bbuf.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF})
 	if err != nil {
 		return nil, err
 	}
 
-	// port
+	// Port
 	_, err = bbuf.Write([]byte{0x05, 0x00})
 	if err != nil {
 		return nil, err
@@ -407,21 +407,21 @@ func prepareAnnounce() ([]byte, error) {
 	return bbuf.Bytes(), nil
 }
 
-func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID, infohash, peerID uint64) error {
+func (c *client) announce(buf, packet []byte, transactionID uint32, connectionID, infohash, peerID uint64) error {
 	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 	binary.BigEndian.PutUint64(packet[0:8], connectionID)
 	binary.BigEndian.PutUint32(packet[12:16], transactionID)
 
 	infohashString := fmt.Sprintf("%020x", infohash)
-	peerIdString := fmt.Sprintf("%020x", peerID)
+	peerIDString := fmt.Sprintf("%020x", peerID)
 
 	for i := 0; i < 20; i++ {
-		packet[16+i] = infohashString[i] //put infohash
-		packet[36+i] = peerIdString[i]   //put peerID
+		packet[16+i] = infohashString[i]
+		packet[36+i] = peerIDString[i]
 	}
 
-	//send
+	// Send announce.
 	n, err := c.conn.Write(packet)
 	if err != nil {
 		return err
@@ -430,7 +430,7 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 		return errors.New("announce: Did not send 98 bytes")
 	}
 
-	//receive response
+	// Receive response.
 	n, err = c.conn.Read(buf)
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "i/o timeout") {
@@ -442,7 +442,7 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 		return errors.New("announce: Did not receive at least 20 bytes")
 	}
 
-	// parse action
+	// Parse action.
 	action := binary.BigEndian.Uint32(buf[:4])
 	if action != 1 {
 		if action == 3 {
@@ -460,7 +460,7 @@ func (c *Client) announce(buf, packet []byte, transactionID uint32, connectionID
 	return nil
 }
 
-func (c *Client) connect(transactionID uint32) (u uint64, err error) {
+func (c *client) connect(transactionID uint32) (u uint64, err error) {
 	c.conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 	c.result.connectAttempts++
