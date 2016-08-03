@@ -105,7 +105,7 @@ func main() {
 		}
 		results[i] = result
 
-		conn, err := net.Dial("udp4", c.url)
+		conn, err := net.Dial("udp", c.url)
 		if err != nil {
 			panic(err)
 		}
