@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/binary"
 	"errors"
 	"flag"
@@ -413,11 +414,19 @@ func (c *client) announce(buf, packet []byte, transactionID uint32, connectionID
 	binary.BigEndian.PutUint64(packet[0:8], connectionID)
 	binary.BigEndian.PutUint32(packet[12:16], transactionID)
 
-	infohashString := fmt.Sprintf("%020x", infohash)
+	infohashBytes := sha1.Sum([]byte{byte(infohash >> 56),
+		byte(infohash >> 48),
+		byte(infohash >> 40),
+		byte(infohash >> 32),
+		byte(infohash >> 24),
+		byte(infohash >> 16),
+		byte(infohash >> 8),
+		byte(infohash)})
+
 	peerIDString := fmt.Sprintf("%020x", peerID)
 
 	for i := 0; i < 20; i++ {
-		packet[16+i] = infohashString[i]
+		packet[16+i] = infohashBytes[i]
 		packet[36+i] = peerIDString[i]
 	}
 
