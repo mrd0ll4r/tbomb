@@ -25,6 +25,7 @@ func init() {
 	flag.BoolVar(&keepAlive, "k", false, "Re-use connection IDs")
 	flag.BoolVar(&scrapeMode, "s", false, "Scrape instead of announcing")
 	flag.BoolVar(&errorReporting, "e", false, "Enable detailed error reporting")
+	flag.BoolVar(&seeder, "f", false, "Send seeder announces (left=0)")
 
 	var infoh = uint64(rand.Int63())
 	ih = &infoh
@@ -52,6 +53,7 @@ var (
 	keepAlive      bool
 	scrapeMode     bool
 	errorReporting bool
+	seeder         bool
 )
 
 const readTimeout time.Duration = time.Second * 2
@@ -62,6 +64,7 @@ type configuration struct {
 	period     time.Duration
 	keepAlive  bool
 	scrapeMode bool
+	seeder     bool
 }
 
 type result struct {
@@ -155,6 +158,7 @@ func newConfig() *configuration {
 		period:     time.Duration(0) * time.Second,
 		keepAlive:  keepAlive,
 		scrapeMode: scrapeMode,
+		seeder:     seeder,
 	}
 
 	if timeout > 0 {
@@ -249,7 +253,7 @@ func (r *result) incrementError(err string, t chan struct{}) {
 func (c *client) do(conf *configuration, t chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 	// Prepare a packet.
-	packet, err := prepareAnnounce()
+	packet, err := prepareAnnounce(conf.seeder)
 	if err != nil {
 		panic(fmt.Sprintf("Unable to create packet: %s", err.Error()))
 	}
@@ -324,7 +328,7 @@ loop:
 	}
 }
 
-func prepareAnnounce() ([]byte, error) {
+func prepareAnnounce(seeder bool) ([]byte, error) {
 	bbuf := bytes.NewBuffer(nil)
 
 	// Connection id
@@ -364,7 +368,11 @@ func prepareAnnounce() ([]byte, error) {
 	}
 
 	// Left
-	_, err = bbuf.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0x01})
+	if seeder {
+		_, err = bbuf.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})
+	} else {
+		_, err = bbuf.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0x01})
+	}
 	if err != nil {
 		return nil, err
 	}
